@@ -25,7 +25,7 @@ The following Windows functions are targeted:
 
 When the crypted PE attempts to directly execute the decrypted buffer, an exception of type `EXCEPTION_ACCESS_VIOLATION` is thrown. Through the use of a Vectorered Exception Handler (VEH), this exception is intercepted, and the allocated memory is dumped to disk.
 
-Depending on the runtime flag chosen, picaboo will do one of the following...
+Depending on the runtime flag chosen, PICaboo will do one of the following...
 * `break` - Dump the memory block to disk and terminate the program by a direct call to `ExitProcess`.
 * `pass` - Attempt to 'fix' the exception by assigning the originally requested permissions of `PAGE_EXECUTE_READWRITE` to the region of memory pointed to by the instruction pointer that forced the exception. The present `EIP/RIP` value is then set to the exception inducing instruction pointer. 
     * This is done via a call to `VirtualAlloc` using a 'backdoor' enum value the hook function monitors for.
@@ -137,7 +137,7 @@ Point to your example directory and pass your target export function...
 
 ## Requirements
 
-The detour DLLs are required, as they contain the necessary hooking functions. You will need to invoke either the 32 or 64 bit version of picaboo depending on your target.
+The detour DLLs are required, as they contain the necessary hooking functions. You will need to invoke either the 32 or 64 bit version of PICaboo depending on your target.
 
 ## Limitations
 
