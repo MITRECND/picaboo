@@ -7,12 +7,14 @@ A Windows based dumper utility for malware analysts and reverse engineers whose 
 A typical barrier to the analysis of a malware family is getting past code designed to obfuscate later stages of the malware. Such programs are generally the by-product of 'crypters', which generally decrypt and execute an embedded payload in memory. PICaboo aims to help analysts by providing a means for analysts to inspect this code.
 
 ```
-Usage: picaboo [RUN FLAG] [TARGET DLL] [DLL EXPORT FUNCTION]
+Usage: picaboo [RUN FLAG] [TARGET DLL/EXE] [TARGET PARAMETERS]
 [RUN FLAG] : [break|pass]
         break - Exit on first direct call into allocated memory address space.
         pass - Continue execution of target.
 [TARGET] : Path to the target file.
-[EXPORT FUNCTION] : What export function should be called?
+[TARGET PARAMETERS] : Runtime parameters of the target. Context varies depending on the file type.
+        dll  - Export entry of target DLL.
+        exe  - Runtime parameters to use for EXE.
 ```
 
 This program hooks and monitors calls to various Windows fuctions involved with the allocation of memory. It pays specific attention to new allocations that request `PAGE_EXECUTE_READWRITE` permissions. These permissions are usually requested by crypted executables that allocate memory for a buffer that is subsequently decrypted and executed. picaboo modifies these calls via an API hook, and changing the page permissions to `PAGE_READWRITE`. 
@@ -23,7 +25,7 @@ The following Windows functions are targeted:
 * [VirtualProtect](https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect)
 * [VirtualProtectEx](https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotectex)
 
-When the crypted PE attempts to directly execute the decrypted buffer, an exception of type `EXCEPTION_ACCESS_VIOLATION` is thrown. Through the use of a Vectorered Exception Handler (VEH), this exception is intercepted, and the allocated memory is dumped to disk.
+When the crypted PE attempts to directly execute the decrypted buffer, an exception of type `EXCEPTION_ACCESS_VIOLATION` is thrown. Through the use of a [Vectorered Exception Handler](https://docs.microsoft.com/en-us/windows/win32/debug/vectored-exception-handling) (VEH), this exception is intercepted, and the allocated memory is dumped to disk.
 
 Depending on the runtime flag chosen, PICaboo will do one of the following...
 * `break` - Dump the memory block to disk and terminate the program by a direct call to `ExitProcess`.
@@ -51,28 +53,36 @@ Let's say we are only interested in the next stage, we would execute with the ru
 
 ```
 picaboo32.exe break .\samples\wwlib.dll FMain
-Installing hooks...
 Loading .\samples\wwlib.dll with target FMain...
 Successfully loaded target at 0x6F571300...
+```
+
+Checking the log file generated for the file reveals a 8192 byte payload was dumped from memory.
+
+```
+=============================
+picaboo hook library initialized!
 Modified PAGE_EXECUTE_READWRITE allocation with PAGE_READWRITE for allocation at address 0x00160000...
 -----------------------------
 Exception Offset: 0x00160000
 Error Code: 0xC0000005
 Writing 8192 bytes from 0x00160000 to dump_wwlib_0x00160000_ep_0x0.bin...
-Removing hooks...
 ```
 
 #### Enumerating More KerrDown Plugins
 
-But what if we want to continue execution. As cited by the original article, there are multiple stages here to analyze. This is where the `pass` command comes in handy.
+But what if we want to continue execution? As cited by the original article, there are multiple stages here to analyze. This is where the `pass` command comes in handy.
 
 Prior to execution in a victim VM, we can set up a service like `inetsim` to spoof DNS and HTTP responses on a separate VM, and configure the victim to solicit this host for those requests.
 
 ```
 picaboo32.exe pass .\samples\wwlib.dll FMain
-Installing hooks...
 Loading .\samples\wwlib.dll with target FMain...
 Successfully loaded target at 0x73931300...
+```
+
+A look at the log file...
+```
 Modified PAGE_EXECUTE_READWRITE allocation with PAGE_READWRITE for allocation at address 0x00160000...
 -----------------------------
 Exception Offset: 0x00160000
@@ -111,10 +121,10 @@ Error Code: 0xC0000096
 -----------------------------
 ```
 
-As can be seen, multiple modules pop out that are directly executed. Each module was encrypted or compressed at one point, however `picaboo` did the heavy lifting for us and dumped the unobfuscated modules to disk prior to execution. The RE can then piece together the sequence and begin a deeper dive.
+As can be seen, multiple modules pop out that are directly executed. These have been dumped to disk in `memdumps`. Each module was encrypted or compressed at one point, however `picaboo` did the heavy lifting for us and dumped the unobfuscated modules to disk prior to execution. The RE can then piece together the sequence and begin a deeper dive.
 
 ### Bulk Processing
-Bulk processing for multiple samples exhibiting a similar characteristic can be done easily by integrating with PowerShell.
+Bulk processing for multiple samples exhibiting a similar characteristic can be done easily with PowerShell.
 
 ```
 param (
@@ -135,9 +145,60 @@ foreach ($file in $files)
 Point to your example directory and pass your target export function...
 ` C:\Users\test\iterate.ps1 pass samples/* FMain`
 
+### The Case of the Crypted PE
+
+The following blog post from Malwarebytes entitled [Malware Crypters – the Deceptive First Layer](https://blog.malwarebytes.com/threat-analysis/2015/12/malware-crypters-the-deceptive-first-layer/) provides a good opportunity to advertise picaboo's capabilities on a target executable.
+
+One of the discussed samples (bearing MD5 1afb93d482fd46b44a64c9e987c02a27) is delivered by the Blackhole Exploit Kit and seems interesting, so lets run it through picaboo. 
+
+```
+picaboo32.exe pass .\samples\1afb93d482fd46b44a64c9e987c02a27.vt
+Excuting run command: .\samples\1afb93d482fd46b44a64c9e987c02a27.vt
+Injected picaboo32.dll into .\samples\1afb93d482fd46b44a64c9e987c02a27.vt...
+Initialized picaboo32.dll!
+```
+
+Doing this allows the malware to continue running while we intercept allocated memory regions that are directly executed. Spinning packet capture software like wireshark should show periodic beacons to its configured callback.
+
+Checking out the memdumps directory, we can see two payloads were allocated and executed. Further study of the final payload reveals an executable that is loaded and kicked off in memory by the crypter! 
+
+```
+hexdump -Cv dump_1afb93d482fd46b44a64c9e987c02a27_0x00400000_ep_0x22C0.bin | less
+00000000  4d 5a 90 00 03 00 00 00  04 00 00 00 ff ff 00 00  |MZ..............|
+00000010  b8 00 00 00 00 00 00 00  40 00 00 00 00 00 00 00  |........@.......|
+00000020  00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00  |................|
+00000030  00 00 00 00 00 00 00 00  00 00 00 00 d0 00 00 00  |................|
+00000040  0e 1f ba 0e 00 b4 09 cd  21 b8 01 4c cd 21 54 68  |........!..L.!Th|
+00000050  69 73 20 70 72 6f 67 72  61 6d 20 63 61 6e 6e 6f  |is program canno|
+00000060  74 20 62 65 20 72 75 6e  20 69 6e 20 44 4f 53 20  |t be run in DOS |
+00000070  6d 6f 64 65 2e 0d 0d 0a  24 00 00 00 00 00 00 00  |mode....$.......|
+
+```
+
+Studying a bit closer, we can even see the callback address being assembled via stack strings...
+
+```
+seg000:00401A60 C7 05 A0 40+mov     ds:dword_4140A0, '4.87'
+seg000:00401A60 41 00 37 38+
+seg000:00401A60 2E 34
+seg000:00401A6A 66 C7 05 A4+mov     ds:word_4140A4, '.6'
+seg000:00401A6A 40 41 00 36+
+seg000:00401A6A 2E
+seg000:00401A73 A2 A6 40 41+mov     ds:byte_4140A6, al
+seg000:00401A73 00
+seg000:00401A78 C7 05 A7 40+mov     ds:dword_4140A7, '12.0'
+seg000:00401A78 41 00 30 2E+
+seg000:00401A78 32 31
+seg000:00401A82 66 C7 05 AB+mov     ds:word_4140AB, '0'
+```
+
 ## Requirements
 
-The detour DLLs are required, as they contain the necessary hooking functions. You will need to invoke either the 32 or 64 bit version of PICaboo depending on your target.
+The picaboo DLLs are required, as they contain the necessary hooking functions. You will need to invoke either the 32 or 64 bit version of PICaboo depending on your target.
+
+### DEP
+
+You need to have DEP enabled on your host for this program to work effectively. You will recieve an error from `picaboo` if DEP is not configured appropriately.
 
 ## Limitations
 
@@ -145,7 +206,7 @@ This project is still in its early stages, and was initially developed as a quic
 
 The following assumptions are made concerning any prospective use case:
 
-* The target is a DLL with an export function that does not take any arguments.
+* The target is a DLL with an export function that does not take any arguments or an EXE (arguments are permitted here).
 * Memory allocation or permission modification is made using one of the hooked Windows functions.
   * `PAGE_EXECUTE_READWRITE` permissions for the allocated region are requested.
 
@@ -155,9 +216,7 @@ Keep in mind also that depending on the functionality of the target, your result
 
 ## Future Ideas
 
-* Compatability with executables.
-* White listing memory regions specifically associated with certain modules (kernel32.dll, etc).
-* Option to execute a file as PIC instead of requiring it be an EXE/DLL.
+* Option to execute a file as PIC instead of requiring it be a EXE/DLL.
 * Option to pass `EXCEPTION_CONTINUE_SEARCH` from VEH if we find ourselves stuck in an infinite loop. 
     * Malware that tries to erroneously execute code in a protected region for example will also produce an `EXCEPTION_ACCESS_VIOLATION`.
     
