@@ -12,8 +12,9 @@
 
 # Build results
 [Dd]ebug/
+detour/[Rr]elease/
+picaboo/[Rr]elease/
 [Dd]ebugPublic/
-[Rr]elease/
 [Rr]eleases/
 x64/
 x86/
@@ -69,6 +70,8 @@ artifacts/
 *.pidb
 *.svclog
 *.scc
+*.lib
+*.exp
 
 # Chutzpah Test files
 _Chutzpah*
