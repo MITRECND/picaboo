@@ -148,7 +148,7 @@ Point to your example directory and pass your target export function...
 
 ### The Case of the Crypted PE
 
-The following blog post from Malwarebytes entitled [Malware Crypters the Deceptive First Layer](https://blog.malwarebytes.com/threat-analysis/2015/12/malware-crypters-the-deceptive-first-layer/) provides a good opportunity to advertise `picaboo's` capabilities on a target executable.
+The following blog post from Malwarebytes on [Malware Crypters](https://blog.malwarebytes.com/threat-analysis/2015/12/malware-crypters-the-deceptive-first-layer/) provides a good opportunity to advertise `picaboo's` capabilities on a target executable.
 
 One of the discussed samples (bearing MD5 1afb93d482fd46b44a64c9e987c02a27) is delivered by the Blackhole Exploit Kit and seems interesting, so let's run it through `picaboo`. 
 
