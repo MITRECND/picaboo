@@ -4,7 +4,7 @@ A Windows based dumper utility for malware analysts and reverse engineers whose 
 
 ## Overview
 
-A typical barrier to the analysis of a malware family is getting past code designed to obfuscate later stages of the malware. Such programs are generally the by-product of 'crypters', which generally decrypt and execute an embedded payload in memory. PICaboo aims to help analysts by providing a means for analysts to inspect this code.
+A typical barrier to the analysis of a malware family is getting past code designed to obfuscate later stages of the malware. Such programs are generally the by-product of 'crypters', which generally decrypt and execute an embedded payload in memory. `picaboo` aims to help analysts by providing a means for analysts to inspect this code.
 
 ```
 Usage: picaboo [RUN FLAG] [TARGET DLL/EXE] [TARGET PARAMETERS]
@@ -17,7 +17,7 @@ Usage: picaboo [RUN FLAG] [TARGET DLL/EXE] [TARGET PARAMETERS]
         exe  - Runtime parameters to use for EXE.
 ```
 
-This program hooks and monitors calls to various Windows fuctions involved with the allocation of memory. It pays specific attention to new allocations that request `PAGE_EXECUTE_READWRITE` permissions. These permissions are usually requested by crypted executables that allocate memory for a buffer that is subsequently decrypted and executed. picaboo modifies these calls via an API hook, and changing the page permissions to `PAGE_READWRITE`. 
+This program hooks and monitors calls to various Windows fuctions involved with the allocation of memory. It pays specific attention to new allocations that request `PAGE_EXECUTE_READWRITE` permissions. These permissions are usually requested by crypted executables that allocate memory for a buffer that is subsequently decrypted and executed. `picaboo` modifies these calls via an API hook, and changing the page permissions to `PAGE_READWRITE`. 
 
 The following Windows functions are targeted:
 * [VirtualAlloc](https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc)
@@ -27,7 +27,7 @@ The following Windows functions are targeted:
 
 When the crypted PE attempts to directly execute the decrypted buffer, an exception of type `EXCEPTION_ACCESS_VIOLATION` is thrown. Through the use of a [Vectorered Exception Handler](https://docs.microsoft.com/en-us/windows/win32/debug/vectored-exception-handling) (VEH), this exception is intercepted, and the allocated memory is dumped to disk.
 
-Depending on the runtime flag chosen, PICaboo will do one of the following...
+Depending on the runtime flag chosen, `picaboo` will do one of the following...
 * `break` - Dump the memory block to disk and terminate the program by a direct call to `ExitProcess`.
 * `pass` - Attempt to 'fix' the exception by assigning the originally requested permissions of `PAGE_EXECUTE_READWRITE` to the region of memory pointed to by the instruction pointer that forced the exception. The present `EIP/RIP` value is then set to the exception inducing instruction pointer. 
     * This is done via a call to `VirtualAlloc` using a 'backdoor' enum value the hook function monitors for.
@@ -36,6 +36,7 @@ Dumped memory regions are written to the `memdumps`, which is created in the sam
 
 dump_[FILENAME]\_[BASE ADDRESS]\_ep_[HW ENTRY POINT].bin
 
+It should be noted here that the AllocationBase for the given memory region is what is used as the region starting point (not the BaseAddress). This ensures to the best degree possible a full accounting of data. The region size is computed by walking the entire region and accounting for all pages that map to the original AllocationBase. See the [MEMORY_BASIC_INFORMATION](https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information) for more details. 
 
 ## Examples
 
@@ -73,7 +74,7 @@ Writing 8192 bytes from 0x00160000 to dump_wwlib_0x00160000_ep_0x0.bin...
 
 But what if we want to continue execution? As cited by the original article, there are multiple stages here to analyze. This is where the `pass` command comes in handy.
 
-Prior to execution in a victim VM, we can set up a service like `inetsim` to spoof DNS and HTTP responses on a separate VM, and configure the victim to solicit this host for those requests.
+Prior to execution in a victim VM, we can set up a service like [inetsim](https://www.inetsim.org/) to spoof DNS and HTTP responses on a separate VM, and configure the victim to solicit this host for those requests.
 
 ```
 picaboo32.exe pass .\samples\wwlib.dll FMain
@@ -147,9 +148,9 @@ Point to your example directory and pass your target export function...
 
 ### The Case of the Crypted PE
 
-The following blog post from Malwarebytes entitled [Malware Crypters – the Deceptive First Layer](https://blog.malwarebytes.com/threat-analysis/2015/12/malware-crypters-the-deceptive-first-layer/) provides a good opportunity to advertise picaboo's capabilities on a target executable.
+The following blog post from Malwarebytes entitled [Malware Crypters – the Deceptive First Layer](https://blog.malwarebytes.com/threat-analysis/2015/12/malware-crypters-the-deceptive-first-layer/) provides a good opportunity to advertise `picaboo's` capabilities on a target executable.
 
-One of the discussed samples (bearing MD5 1afb93d482fd46b44a64c9e987c02a27) is delivered by the Blackhole Exploit Kit and seems interesting, so lets run it through picaboo. 
+One of the discussed samples (bearing MD5 1afb93d482fd46b44a64c9e987c02a27) is delivered by the Blackhole Exploit Kit and seems interesting, so let's run it through `picaboo`. 
 
 ```
 picaboo32.exe pass .\samples\1afb93d482fd46b44a64c9e987c02a27.vt
@@ -158,7 +159,7 @@ Injected picaboo32.dll into .\samples\1afb93d482fd46b44a64c9e987c02a27.vt...
 Initialized picaboo32.dll!
 ```
 
-Doing this allows the malware to continue running while we intercept allocated memory regions that are directly executed. Spinning packet capture software like wireshark should show periodic beacons to its configured callback.
+Doing this allows the malware to continue running while we intercept allocated memory regions that are directly executed. Spinning up packet capture software like wireshark should show periodic beacons to its configured callback.
 
 Checking out the memdumps directory, we can see two payloads were allocated and executed. Further study of the final payload reveals an executable that is loaded and kicked off in memory by the crypter! 
 
@@ -194,7 +195,7 @@ seg000:00401A82 66 C7 05 AB+mov     ds:word_4140AB, '0'
 
 ## Requirements
 
-The picaboo DLLs are required, as they contain the necessary hooking functions. You will need to invoke either the 32 or 64 bit version of PICaboo depending on your target.
+The `picaboo` DLLs are required, as they contain the necessary hooking functions. You will need to invoke either the 32 or 64 bit version of PICaboo depending on your target.
 
 ### DEP
 

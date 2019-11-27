@@ -1,7 +1,6 @@
 /*
-Copyright(c) 2019 The MITRE Corporation.All rights reserved.
+Copyright(c) 2019 The MITRE Corporation. All rights reserved.
 MITRE Proprietary - Internal Use Only
-TLP:Red and NDA Restrictions may apply.
 For redistribution, specific permission is needed.
 	   Contact: infosec@mitre.org
 
@@ -10,7 +9,7 @@ ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
 ARE DISCLAIMED.IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
 FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
 OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
 HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 LIABILITY, OR TORT(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
@@ -23,6 +22,7 @@ SUCH DAMAGE.
 #include <stdio.h>
 #include <shlwapi.h>
 #include <string>
+#include <inttypes.h>
 
 #pragma comment(lib, "Shlwapi.lib")
 
@@ -57,7 +57,7 @@ void WriteLogFile(const char* logData)
 	if (hfile != INVALID_HANDLE_VALUE)
 	{
 		DWORD bytesWritten;
-		WriteFile(hfile, logData, strlen(logData), &bytesWritten, NULL);
+		WriteFile(hfile, logData, (DWORD)strlen(logData), &bytesWritten, NULL);
 		CloseHandle(hfile);
 	}
 }
@@ -225,7 +225,7 @@ LONG WINAPI VectoredHandler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 
 	errorCode = ExceptionInfo->ExceptionRecord->ExceptionCode;
 	WriteLogFile("-----------------------------\n");
-	sprintf_s(logBuff, sizeof(logBuff), "Exception Offset: 0x%p\nError Code: 0x%.8X\n", instructionPointer, errorCode);
+	sprintf_s(logBuff, sizeof(logBuff), "Exception Offset: 0x%p\nError Code: 0x%.8X\n", (void*)instructionPointer, errorCode);
 	WriteLogFile(logBuff);
 
 	if (errorCode == EXCEPTION_ACCESS_VIOLATION) {
@@ -257,16 +257,18 @@ LONG WINAPI VectoredHandler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 			memWindow = (unsigned char *)memWindow + memInfo.RegionSize;
 		}
 
-		sprintf_s(fileName, sizeof(fileName), "dump_%s_0x%p_ep_0x%X.bin", targetFileName, regionBase, (instructionPointer - (DWORD)regionBase));
-		sprintf_s(logBuff, sizeof(logBuff), "Writing %d bytes from 0x%p to %s...\n", regionSize, regionBase, fileName);
+		sprintf_s(fileName, sizeof(fileName), "dump_%s_0x%p_ep_0x%llX.bin", targetFileName, regionBase, (instructionPointer - (DWORD64)regionBase));
+		sprintf_s(logBuff, sizeof(logBuff), "Writing %Iu bytes from 0x%p to %s...\n", regionSize, regionBase, fileName);
 		WriteLogFile(logBuff);
 
 		StrCpyA(fullDumpPath, initParams.dumpDir);
 		lstrcatA(fullDumpPath, fileName);
 
-		hFile = CreateFileA(fullDumpPath, GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-		WriteFile(hFile, regionBase, regionSize, &dwWritten, NULL);
-		CloseHandle(hFile);
+		if (regionSize) {
+			hFile = CreateFileA(fullDumpPath, GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			WriteFile(hFile, regionBase, (DWORD)regionSize, &dwWritten, NULL);
+			CloseHandle(hFile);
+		}
 
 		if (_stricmp(initParams.runFlag, "break") == 0) {
 			exitProcAdd = (EXITPROC)GetProcAddress(GetModuleHandleA("kernel32.dll"), "ExitProcess");
@@ -278,7 +280,7 @@ LONG WINAPI VectoredHandler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 			#endif 
 		}
 		else if (_stricmp(initParams.runFlag, "pass") == 0) {
-			sprintf_s(logBuff, sizeof(logBuff), "Pass through on region 0x%p for instruction pointer 0x%p\n", regionBase, instructionPointer);
+			sprintf_s(logBuff, sizeof(logBuff), "Pass through on region 0x%p for instruction pointer 0x%p\n", regionBase, (void*)instructionPointer);
 			WriteLogFile(logBuff);
 
 			if (VirtualProtect(regionBase, regionSize, PAGE_EXECUTE_BACKDOOR, &lpflOldProtect)) {
@@ -291,7 +293,7 @@ LONG WINAPI VectoredHandler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 				//printf("Region Size: 0x%X\n", memInfo.RegionSize);
 
 
-				sprintf_s(logBuff, sizeof(logBuff), "Backdoor PAGE_EXECUTE_READWRITE success! Passing control back to 0x%p\n", instructionPointer);
+				sprintf_s(logBuff, sizeof(logBuff), "Backdoor PAGE_EXECUTE_READWRITE success! Passing control back to 0x%p\n", (void*)instructionPointer);
 				WriteLogFile(logBuff);
 
 				#ifdef _WIN64
@@ -301,7 +303,7 @@ LONG WINAPI VectoredHandler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 				#endif 
 			}
 			else {
-				sprintf_s(logBuff, sizeof(logBuff), "Backdoor PAGE_EXEC failure! Error 0x%.8X\n", GetLastError());
+				sprintf_s(logBuff, sizeof(logBuff), "Backdoor PAGE_EXECUTE_READWRITE failure! Error 0x%.8X\n", GetLastError());
 				WriteLogFile(logBuff);
 			}
 		}
