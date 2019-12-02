@@ -7,7 +7,7 @@ A Windows based dumper utility for malware analysts and reverse engineers whose 
 A typical barrier to the analysis of a malware family is getting past code designed to obfuscate later stages of the malware. Such programs are generally the by-product of 'crypters', which generally decrypt and execute an embedded payload in memory. `picaboo` aims to help analysts by providing a means for analysts to inspect this code.
 
 ```
-Usage: picaboo [RUN FLAG] [TARGET DLL/EXE] [TARGET PARAMETERS]
+Usage: picaboo [RUN FLAG] [TARGET DLL/EXE/PIC] [TARGET PARAMETERS]
 [RUN FLAG] : [break|pass]
         break - Exit on first direct call into allocated memory address space.
         pass - Continue execution of target.
@@ -15,6 +15,7 @@ Usage: picaboo [RUN FLAG] [TARGET DLL/EXE] [TARGET PARAMETERS]
 [TARGET PARAMETERS] : Runtime parameters of the target. Context varies depending on the file type.
         dll  - Export entry of target DLL.
         exe  - Runtime parameters to use for EXE.
+        pic  - Offset to begin execution (must be specified in hex with '0x' prefix).
 ```
 
 This program hooks and monitors calls to various Windows fuctions involved with the allocation of memory. It pays specific attention to new allocations that request `PAGE_EXECUTE_READWRITE` permissions. These permissions are usually requested by crypted executables that allocate memory for a buffer that is subsequently decrypted and executed. `picaboo` modifies these calls via an API hook, and changing the page permissions to `PAGE_READWRITE`. 
@@ -207,7 +208,10 @@ This project is still in its early stages, and was initially developed as a quic
 
 The following assumptions are made concerning any prospective use case:
 
-* The target is a DLL with an export function that does not take any arguments or an EXE (arguments are permitted here).
+* The target is one of the following...
+  * A DLL with an export function that does not take any arguments.
+  * An EXE (arguments are permitted here).
+  * Valid shellcode (your argument is the offset from which execution begins)
 * Memory allocation or permission modification is made using one of the hooked Windows functions.
   * `PAGE_EXECUTE_READWRITE` permissions for the allocated region are requested.
 
@@ -217,7 +221,6 @@ Keep in mind also that depending on the functionality of the target, your result
 
 ## Future Ideas
 
-* Option to execute a file as PIC instead of requiring it be a EXE/DLL.
 * Option to pass `EXCEPTION_CONTINUE_SEARCH` from VEH if we find ourselves stuck in an infinite loop. 
     * Malware that tries to erroneously execute code in a protected region for example will also produce an `EXCEPTION_ACCESS_VIOLATION`.
     

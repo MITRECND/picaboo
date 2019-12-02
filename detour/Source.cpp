@@ -42,6 +42,9 @@ struct LibInitParams
 char logBuff[4096];
 PVOID exceptHandle;
 
+// Necessary so we don't interfere with detour libs...
+bool ACTIVATE_HOOKS = FALSE;
+
 #pragma region NativeMethods
 void WriteLogFile(const char* logData)
 {
@@ -51,24 +54,18 @@ void WriteLogFile(const char* logData)
 
 	sprintf_s(logFileName, sizeof(logFileName), "log_%s.txt", targetFileName);
 
-	HANDLE hfile = CreateFileA(logFileName, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-		OPEN_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL);
+	HANDLE hFile = CreateFileA(logFileName, FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+		OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 
-	if (hfile != INVALID_HANDLE_VALUE)
-	{
+	if (hFile != INVALID_HANDLE_VALUE) {
 		DWORD bytesWritten;
-		WriteFile(hfile, logData, (DWORD)strlen(logData), &bytesWritten, NULL);
-		CloseHandle(hfile);
+		WriteFile(hFile, logData, (DWORD)strlen(logData), &bytesWritten, NULL);
+		CloseHandle(hFile);
 	}
 }
 #pragma endregion
 
 #pragma region Hooks
-
-#define PAGE_EXECUTE_BACKDOOR 0x51
-
-// Necessary so we don't interfere with detour libs...
-bool ACTIVATE_HOOKS = FALSE;
 
 static LPVOID(WINAPI * TrueVirtualAlloc)(
 	LPVOID lpAddress, 
@@ -108,16 +105,14 @@ LPVOID WINAPI HookVirtualAlloc(
 )
 {
 	bool resetPermissions = FALSE;
-	if (flProtect == PAGE_EXECUTE_READWRITE && ACTIVATE_HOOKS)
-	{
+	if (flProtect == PAGE_EXECUTE_READWRITE && ACTIVATE_HOOKS) {
 		flProtect = PAGE_READWRITE;
 		resetPermissions = TRUE;
 	}
 	
 	LPVOID result = TrueVirtualAlloc(lpAddress, dwSize, flAllocationType, flProtect);
 
-	if (resetPermissions)
-	{
+	if (resetPermissions) {
 		sprintf_s(logBuff, sizeof(logBuff), "Modified PAGE_EXECUTE_READWRITE allocation with PAGE_READWRITE for allocation at address 0x%p...\n", result);
 		WriteLogFile(logBuff);
 	}
@@ -133,16 +128,14 @@ LPVOID WINAPI HookVirtualAllocEx(
 )
 {
 	bool resetPermissions = FALSE;
-	if (flProtect == PAGE_EXECUTE_READWRITE && ACTIVATE_HOOKS)
-	{
+	if (flProtect == PAGE_EXECUTE_READWRITE && ACTIVATE_HOOKS) {
 		flProtect = PAGE_READWRITE;
 		resetPermissions = TRUE;
 	}
 
 	LPVOID result = TrueVirtualAllocEx(hProcess, lpAddress, dwSize, flAllocationType, flProtect);
 
-	if (resetPermissions)
-	{
+	if (resetPermissions) {
 		sprintf_s(logBuff, sizeof(logBuff), "Modified PAGE_EXECUTE_READWRITE allocation with PAGE_READWRITE for allocation at address 0x%p...\n", result);
 		WriteLogFile(logBuff);
 	}
@@ -158,22 +151,19 @@ BOOL WINAPI HookVirtualProtect(
 )
 {
 	bool resetPermissions = FALSE;
-	if (flNewProtect == PAGE_EXECUTE_READWRITE && ACTIVATE_HOOKS)
-	{
+	if (flNewProtect == PAGE_EXECUTE_READWRITE && ACTIVATE_HOOKS) {
 		flNewProtect = PAGE_READWRITE;
 		resetPermissions = TRUE;
 	}
 
 	// Backdoor call from app to enable pass-through...
-	if (flNewProtect == PAGE_EXECUTE_BACKDOOR)
-	{
+	if (flNewProtect == PAGE_EXECUTE_BACKDOOR) {
 		flNewProtect = PAGE_EXECUTE_READWRITE;
 	}
 
 	BOOL result = TrueVirtualProtect(lpAddress, dwSize, flNewProtect, lpflOldProtect);
 
-	if (resetPermissions)
-	{
+	if (resetPermissions) {
 		sprintf_s(logBuff, sizeof(logBuff), "Modified PAGE_EXECUTE_READWRITE allocation with PAGE_READWRITE for allocation at address 0x%p...\n", lpAddress);
 		WriteLogFile(logBuff);
 	}
@@ -189,16 +179,14 @@ BOOL WINAPI HookVirtualProtectEx(
 )
 {
 	bool resetPermissions = FALSE;
-	if (flNewProtect == PAGE_EXECUTE_READWRITE && ACTIVATE_HOOKS)
-	{
+	if (flNewProtect == PAGE_EXECUTE_READWRITE && ACTIVATE_HOOKS) {
 		flNewProtect = PAGE_READWRITE;
 		resetPermissions = TRUE;
 	}
 
 	BOOL result = TrueVirtualProtectEx(hProcess, lpAddress, dwSize, flNewProtect, lpflOldProtect);
 
-	if (resetPermissions)
-	{
+	if (resetPermissions) {
 		sprintf_s(logBuff, sizeof(logBuff), "Modified PAGE_EXECUTE_READWRITE allocation with PAGE_READWRITE for allocation at address 0x%p...\n", lpAddress);
 		WriteLogFile(logBuff);
 	}
@@ -268,6 +256,11 @@ LONG WINAPI VectoredHandler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 			hFile = CreateFileA(fullDumpPath, GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 			WriteFile(hFile, regionBase, (DWORD)regionSize, &dwWritten, NULL);
 			CloseHandle(hFile);
+			if (dwWritten == 0) {
+				sprintf_s(logBuff, sizeof(logBuff), "There was a problem writing data to %s. Error 0x%.8X\n", fileName, GetLastError());
+				WriteLogFile(logBuff);
+				DeleteFileA(fullDumpPath);
+			}
 		}
 
 		if (_stricmp(initParams.runFlag, "break") == 0) {

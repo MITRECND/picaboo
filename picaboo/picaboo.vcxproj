@@ -140,6 +140,7 @@
       </PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile />
       <ProgramDataBaseFileName />
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -164,6 +165,7 @@
       </PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile />
       <ProgramDataBaseFileName />
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
