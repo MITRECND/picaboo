@@ -4,7 +4,7 @@ A Windows based dumper utility for malware analysts and reverse engineers whose 
 
 ## Overview
 
-A typical barrier to the analysis of a malware family is getting past code designed to obfuscate later stages of the malware. Such programs are generally the by-product of 'crypters', which generally decrypt and execute an embedded payload in memory. `picaboo` aims to help analysts by providing a means for analysts to inspect this code.
+A typical barrier to the analysis of a malware family is getting past code designed to obfuscate later stages of the malware. Such programs are generally the by-product of 'crypters', which commonly decrypt and execute an embedded payload in memory. `picaboo` aims to help analysts by providing a means for analysts to inspect this code.
 
 ```
 Usage: picaboo [RUN FLAG] [TARGET DLL/EXE/PIC] [TARGET PARAMETERS]
@@ -214,6 +214,7 @@ The following assumptions are made concerning any prospective use case:
   * Valid shellcode (your argument is the offset from which execution begins)
 * Memory allocation or permission modification is made using one of the hooked Windows functions.
   * `PAGE_EXECUTE_READWRITE` permissions for the allocated region are requested.
+* There are no dependancies on a parent process required by the target.
 
 Depending on the functionality of the target, you may end up with a partially decrypted loader, or perhaps a small stub of shellcode that unwinds more code later. At a minimum you know the region dumped was marked for execution AND an attempt was made to do so.
 
