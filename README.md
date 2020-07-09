@@ -37,7 +37,7 @@ Dumped memory regions are written to the `memdumps`, which is created in the sam
 
 dump_[FILENAME]\_[BASE ADDRESS]\_ep_[HW ENTRY POINT].bin
 
-It should be noted here that the AllocationBase for the given memory region is what is used as the region starting point (not the BaseAddress). This ensures to the best degree possible a full accounting of data. The region size is computed by walking the entire region and accounting for all pages that map to the original AllocationBase. See the [MEMORY_BASIC_INFORMATION](https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information) for more details. 
+It should be noted here that the `AllocationBase` for the given memory region is what is used as the region starting point (not the `BaseAddress`). This ensures to the best degree possible a full accounting of data. The region size is computed by walking the entire region and accounting for all pages that map to the original `AllocationBase`. See the [MEMORY_BASIC_INFORMATION](https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information) structure for more details. 
 
 ## Examples
 
@@ -45,7 +45,7 @@ It should be noted here that the AllocationBase for the given memory region is w
 
 OSINT reporting on what Palo Alto has coined '[KerrDown](https://unit42.paloaltonetworks.com/tracking-oceanlotus-new-downloader-kerrdown/)' provides a good opportunity to pick on this malware family some more, and see how `picaboo` can assist an RE.
 
-In KerrDown, Base64 encoded data is executed as PIC. Which reveals multiple modules leading to an attempt to download and execute more PIC.
+In KerrDown, Base64 encoded data is decoded and executed as PIC. Which reveals multiple modules leading to an attempt to download and execute more PIC.
 
 If we take the cited SHA256 `040abac56542a2e0f384adf37c8f95b2b6e6ce3a0ff969e3c1d572e6b4053ff3` and unrar it, we can see the offending DLL `wwlib.dll` which is loaded and has its export function `FMain` executed by the executable `Noi dung chi tiet don khieu nai gui cong ty.exe`.
 
@@ -209,7 +209,7 @@ int main()
 	const char crypted[200] =
 	"\x62\x98\x35\xda\x18\x61\xda\x18\x5d\xda\x18\x4d\xda\x08\x59"
 	"\xda\x10\x71\xda\x58\xd1\x29\x5d\x62\x24\xa3\xda\xba\x52\x3c"
-	// … more shellcode here …
+	// ... more shellcode here ...
 	 
 	// Allocate memory for our crypted code, notice here we only request read/write privs 
 	LPVOID lpAddress = VirtualAlloc(NULL, sizeof(crypted), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -232,7 +232,7 @@ int main()
 }
 ```
 
-Taking our initial proof of concept into account, we can simply begin by executing the compiled executable using the tool…
+Taking our initial proof of concept into account, we can simply begin by executing the compiled executable using the tool...
 
 ```
 picaboo32.exe break poc.exe
@@ -241,7 +241,7 @@ Injected libs\picaboo32.dll into poc.exe...
 Initialized libs\picaboo32.dll!
 ```
 
-Looking at our logfile, we can see the memdump created…
+Looking at our logfile, we can see the memdump created.
 
 ```
 picaboo hook library initialized!
@@ -252,7 +252,7 @@ Error Code: 0xC0000005
 Writing 4096 bytes from 0x00110000 to dump_poc_0x00110000_ep_0x0.bin...
 ```
 
-This memory dump shows the deobfuscated shellcode. The idea is to get a dump of memory as it looks just prior to execution. For example, below is a snippet of the same crypted blob as above, decrypted, just prior to execution…
+This memory dump shows the deobfuscated shellcode. The idea is to get a dump of memory as it looks just prior to execution. For example, below is a snippet of the same crypted blob as above, decrypted, just prior to execution.
  
 ```
 00000000  33 c9 64 8b 49 30 8b 49 0c 8b 49 1c 8b 59 08 8b  |3.d.I0.I..I..Y..|
