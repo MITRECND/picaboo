@@ -1,20 +1,15 @@
 /*
-Copyright(c) 2019 The MITRE Corporation. All rights reserved.
-MITRE Proprietary - Internal Use Only
-For redistribution, specific permission is needed.
-	   Contact: infosec@mitre.org
+   Copyright(c) 2020 The MITRE Corporation. All rights reserved.
 
-THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-ARE DISCLAIMED.IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
-OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-LIABILITY, OR TORT(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
-OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-SUCH DAMAGE.
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+	   http://www.apache.org/licenses/LICENSE-2.0
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 */
 
 #include <Windows.h>
@@ -264,7 +259,14 @@ LONG WINAPI VectoredHandler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 		}
 
 		if (_stricmp(initParams.runFlag, "break") == 0) {
-			exitProcAdd = (EXITPROC)GetProcAddress(GetModuleHandleA("kernel32.dll"), "ExitProcess");
+			HMODULE hMod = GetModuleHandleA("kernel32.dll");
+			if (hMod == NULL) {
+				sprintf_s(logBuff, sizeof(logBuff), "Could not aquire module handle. Error 0x%.8X\n", GetLastError());
+				WriteLogFile(logBuff);
+				return EXCEPTION_CONTINUE_SEARCH;
+			}
+
+			exitProcAdd = (EXITPROC)GetProcAddress(hMod, "ExitProcess");
 
 			#ifdef _WIN64
 				ExceptionInfo->ContextRecord->Rip = exitProcAdd(0);
@@ -373,7 +375,7 @@ BOOL APIENTRY DllMain(HINSTANCE hInstance, DWORD  fdwReason, LPVOID lpReserved)
 			DetourDetach(&(PVOID&)TrueVirtualProtectEx, HookVirtualProtectEx);
 			error = DetourTransactionCommit();
 
-			if (exceptHandle == NULL) {
+			if (exceptHandle != NULL) {
 				RemoveVectoredExceptionHandler(exceptHandle);
 			}
 			break;

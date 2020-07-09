@@ -18,7 +18,7 @@ Usage: picaboo [RUN FLAG] [TARGET DLL/EXE/PIC] [TARGET PARAMETERS]
         pic  - Offset to begin execution (must be specified in hex with '0x' prefix).
 ```
 
-This program hooks and monitors calls to various Windows fuctions involved with the allocation of memory. It pays specific attention to new allocations that request `PAGE_EXECUTE_READWRITE` permissions. These permissions are usually requested by crypted executables that allocate memory for a buffer that is subsequently decrypted and executed. `picaboo` modifies these calls via an API hook, and changing the page permissions to `PAGE_READWRITE`. 
+This program hooks and monitors calls to various Windows functions involved with the allocation of memory. It pays specific attention to new allocations that request `PAGE_EXECUTE_READWRITE` permissions. These permissions are usually requested by crypted executables that allocate memory for a buffer that is subsequently decrypted and executed. `picaboo` modifies these calls via an API hook, and changing the page permissions to `PAGE_READWRITE`. 
 
 The following Windows functions are targeted:
 * [VirtualAlloc](https://docs.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc)
@@ -160,7 +160,7 @@ Injected picaboo32.dll into .\samples\1afb93d482fd46b44a64c9e987c02a27.vt...
 Initialized picaboo32.dll!
 ```
 
-Doing this allows the malware to continue running while we intercept allocated memory regions that are directly executed. Spinning up packet capture software like wireshark should show periodic beacons to its configured callback.
+Doing this allows the malware to continue running while we intercept allocated memory regions that are directly executed. Spinning up packet capture software like Wireshark should show periodic beacons to its configured callback.
 
 Checking out the memdumps directory, we can see two payloads were allocated and executed. Further study of the final payload reveals an executable that is loaded and kicked off in memory by the crypter! 
 
@@ -194,13 +194,103 @@ seg000:00401A78 32 31
 seg000:00401A82 66 C7 05 AB+mov     ds:word_4140AB, '0'
 ```
 
+### Fun With Shellcode
+
+It's easy enough to experiment with PICaboo by writing your own loader for shellcode. 
+
+```
+#include <iostream>
+#include <windows.h>
+ 
+int main()
+{
+	DWORD lpflOldProtect;
+	// I encrypted the shellcode used here: https://www.exploit-db.com/exploits/37758
+	const char crypted[200] =
+	"\x62\x98\x35\xda\x18\x61\xda\x18\x5d\xda\x18\x4d\xda\x08\x59"
+	"\xda\x10\x71\xda\x58\xd1\x29\x5d\x62\x24\xa3\xda\xba\x52\x3c"
+	// … more shellcode here …
+	 
+	// Allocate memory for our crypted code, notice here we only request read/write privs 
+	LPVOID lpAddress = VirtualAlloc(NULL, sizeof(crypted), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	// Snag a pointer to our allocated region we will iterate on
+	char *ptr = (char *)lpAddress;
+	// Loop through the crypted buffer and decrypt the code
+	for (int i = 0; i <= sizeof(crypted); i++) {
+		*(ptr++) = crypted[i] ^ 0x51;
+	}
+ 
+	// Now elevate permissions to our decrypted buffer to execute
+	if (!VirtualProtect((LPVOID)lpAddress, sizeof(crypted), PAGE_EXECUTE_READWRITE, &lpflOldProtect)) {
+		printf("VirtualProtect failed: %d\n", GetLastError());
+		return EXIT_FAILURE;
+	}
+ 
+	// Execute decryped shellcode...
+	((void(*)(void))lpAddress)();
+	return EXIT_SUCCESS;
+}
+```
+
+Taking our initial proof of concept into account, we can simply begin by executing the compiled executable using the tool…
+
+```
+picaboo32.exe break poc.exe
+Executing run command: poc.exe
+Injected libs\picaboo32.dll into poc.exe...
+Initialized libs\picaboo32.dll!
+```
+
+Looking at our logfile, we can see the memdump created…
+
+```
+picaboo hook library initialized!
+Modified PAGE_EXECUTE_READWRITE allocation with PAGE_READWRITE for allocation at address 0x00110000...
+-----------------------------
+Exception Offset: 0x00110000
+Error Code: 0xC0000005
+Writing 4096 bytes from 0x00110000 to dump_poc_0x00110000_ep_0x0.bin...
+```
+
+This memory dump shows the deobfuscated shellcode. The idea is to get a dump of memory as it looks just prior to execution. For example, below is a snippet of the same crypted blob as above, decrypted, just prior to execution…
+ 
+```
+00000000  33 c9 64 8b 49 30 8b 49 0c 8b 49 1c 8b 59 08 8b  |3.d.I0.I..I..Y..|
+00000010  41 20 8b 09 80 78 0c 33 75 f2 8b eb 03 6d 3c 8b  |A ...x.3u....m<.|
+...
+```
+
+It disassembles cleanly beginning at the 0x0 offset, and we can see clearly the code begin walking the Process Environment Block (PEB) - typical shellcode stuff.
+
+```
+ndisasm -u dump.bin | less
+00000000  33C9              xor ecx,ecx
+00000002  648B4930          mov ecx,[fs:ecx+0x30]
+00000006  8B490C            mov ecx,[ecx+0xc]
+00000009  8B491C            mov ecx,[ecx+0x1c]
+0000000C  8B5908            mov ebx,[ecx+0x8]
+```
+
+While we can continue to statically analyze this dump file, we also have the ability to just execute this directly using PICaboo. 
+
+```
+picaboo32.exe break .\memdumps\dump_poc_0x00110000_ep_0x0.bin 0x0
+Proceeding as PIC and executing directly...
+PIC loaded at 0x00100000, executing...
+  HW offset: 0x0
+  Virtual address: 0x00100000
+```
+
+Doing this simply executes the code directly, no further stages are dumped to disk. The only thing you get is a simple message window.
+
+
 ## Requirements
 
 The `picaboo` DLLs are required, as they contain the necessary hooking functions. You will need to invoke either the 32 or 64 bit version of PICaboo depending on your target.
 
 ### DEP
 
-You need to have DEP enabled on your host for this program to work effectively. You will recieve an error from `picaboo` if DEP is not configured appropriately.
+You need to have DEP enabled on your host for this program to work effectively. You will receive an error from `picaboo` if DEP is not configured appropriately.
 
 ## Limitations
 
@@ -214,11 +304,11 @@ The following assumptions are made concerning any prospective use case:
   * Valid shellcode (your argument is the offset from which execution begins)
 * Memory allocation or permission modification is made using one of the hooked Windows functions.
   * `PAGE_EXECUTE_READWRITE` permissions for the allocated region are requested.
-* There are no dependancies on a parent process required by the target.
+* There are no dependencies on a parent process required by the target.
 
 Depending on the functionality of the target, you may end up with a partially decrypted loader, or perhaps a small stub of shellcode that unwinds more code later. At a minimum you know the region dumped was marked for execution AND an attempt was made to do so.
 
-Keep in mind also that depending on the functionality of the target, your results may be unpredictable (especially with the `pass` flag). It is always recommended to do these kind of activities in a well isolated sandbox.
+Keep in mind also that depending on the functionality of the target, your results may be unpredictable (especially with the `pass` flag). It is always recommended to do these kinds of activities in a well isolated sandbox.
 
 ## Future Ideas
 
@@ -233,7 +323,7 @@ This project was developed using Visual Studio, so it is a good idea to install 
 
 Here are the steps that worked for me. 
 
-* Get the latest version of [MS Detours](https://github.com/microsoft/Detours).
+* Get the latest version of [MS Detours](https://github.com/microsoft/Detours). Which is covered under the [MIT license](https://github.com/microsoft/Detours/blob/master/LICENSE.md).
 * Navigate to build folder for Visual Studio `C:\Program Files (x86)\Microsoft Visual C++ Build Tools`. If you don't have it, you may have to [download](https://visualstudio.microsoft.com/downloads/) it. 
 * Open `Visual C++ 2015 x86 Native Build Tools Command Prompt`
 * Navigate to the Detours `src` directory and type `nmake`.
