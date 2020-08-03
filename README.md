@@ -4,7 +4,7 @@ A Windows based dumper utility for malware analysts and reverse engineers whose 
 
 ## Overview
 
-A typical barrier to the analysis of a malware family is getting past code designed to obfuscate later stages of the malware. Such programs are generally the by-product of 'crypters', which commonly decrypt and execute an embedded payload in memory. `picaboo` aims to help analysts by providing a means for analysts to inspect this code.
+A typical barrier to the analysis of a malware family is getting past code designed to obfuscate later stages of the malware. Such programs are generally the by-product of 'crypters', and commonly decrypt and execute an embedded payload in memory. `picaboo` aims to help analysts by providing a means for analysts to inspect this code.
 
 ```
 Usage: picaboo [RUN FLAG] [TARGET DLL/EXE/PIC] [TARGET PARAMETERS]
@@ -162,7 +162,7 @@ Initialized picaboo32.dll!
 
 Doing this allows the malware to continue running while we intercept allocated memory regions that are directly executed. Spinning up packet capture software like Wireshark should show periodic beacons to its configured callback.
 
-Checking out the memdumps directory, we can see two payloads were allocated and executed. Further study of the final payload reveals an executable that is loaded and kicked off in memory by the crypter! 
+Checking out the memdumps directory, we can see two payloads were allocated and executed. Further study of the final payload reveals an executable that is loaded and kicked off in memory! 
 
 ```
 hexdump -Cv dump_1afb93d482fd46b44a64c9e987c02a27_0x00400000_ep_0x22C0.bin | less
