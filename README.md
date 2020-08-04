@@ -1,6 +1,6 @@
 # PICaboo
 
-A Windows based dumper utility for malware analysts and reverse engineers whose aim is to dump crypted Position Independent Code (PIC).
+A Windows based dumper utility for malware analysts and reverse engineers whose aim is to dump crypted Position Independent Code (PIC). The tool has seen the most success when analyzing modular/plugin-based malware. 
 
 ## Overview
 
@@ -291,6 +291,12 @@ The `picaboo` DLLs are required, as they contain the necessary hooking functions
 ### DEP
 
 You need to have DEP enabled on your host for this program to work effectively. You will receive an error from `picaboo` if DEP is not configured appropriately.
+
+An easy way to do this is to:
+* Right-click 'Computer'/'This PC' and click 'Advanced system settings'
+* Under the 'Advanced' tab under 'Performance' click 'Settings' 
+* Under the 'Data Execution Prevention' tab select the bottom option to turn on DEP for all programs.
+* Reboot the host. 
 
 ## Limitations
 
